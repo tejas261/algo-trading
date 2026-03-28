@@ -1,0 +1,19 @@
+risk:
+  risk_per_trade_pct: 1.0
+  leverage: 2.0
+  max_trades_per_day: 2
+  consecutive_loss_stop: 2
+  cooldown_candles_after_stopout: 3
+  atr_volatility_filter:
+    enabled: true
+    max_atr_ratio: 1.8
+    rolling_window: 50
+
+  live_controls:
+    max_daily_drawdown_pct: 3.0
+    max_exposure_pct: 100.0
+    kill_switch: false
+    circuit_breaker:
+      max_consecutive_rejections: 3
+      max_slippage_bps: 50
+      slippage_window_trades: 5

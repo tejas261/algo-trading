@@ -1,0 +1,79 @@
+# Donchian Trend 55 variant for comparison
+# Usage: python main.py --config config/crypto_donchian_config.yaml backtest --data data/btc_1h.csv --symbol BTCUSDT
+
+app:
+  name: "AlgoTrader-Crypto-Donchian"
+  mode: "backtest"
+
+data:
+  source: "csv"
+  default_symbol: "BTCUSDT"
+  default_timeframe: "1h"
+  gap_detection: "warn"
+  market_type: "crypto"
+
+strategy:
+  name: "donchian_trend_55"
+  strategy_name: "donchian_trend_55"
+  timeframe: "1h"
+  market_type: "crypto"
+  instrument_type: "perpetual"
+
+  indicators:
+    strategy_name: "donchian_trend_55"
+    ema_fast: 20
+    ema_mid: 50
+    ema_slow: 200
+    adx_period: 14
+    atr_period: 14
+    channel_period: 20
+    atr_filter_lookback: 50
+
+  exit:
+    exit_mode: "donchian"
+    initial_stop_atr_multiple: 2.5
+    trailing_stop_atr_multiple: 4.0
+
+  leverage: 2.0
+  initial_margin_fraction: 0.5
+  maintenance_margin_fraction: 0.005
+  liquidation_fee_bps: 50
+  funding_mode: "regime_approx"
+  funding_bps_per_8h: 1.0
+  enable_funding_costs: true
+
+risk:
+  risk_per_trade_pct: 1.0
+  leverage: 2.0
+  max_trades_per_day: 2
+  consecutive_loss_stop: 2
+  cooldown_candles_after_stopout: 5
+  risk_window_mode: "rolling_24h"
+  risk_window_hours: 24
+  atr_volatility_filter:
+    enabled: true
+    max_atr_ratio: 1.8
+    rolling_window: 50
+
+instrument:
+  min_notional: 10.0
+  min_qty: 0.00001
+  qty_step: 0.00001
+  price_tick: 0.01
+  assumed_daily_volume: 1000000000.0
+
+paper:
+  initial_capital: 10000.0
+  currency: "USDT"
+  cost_model:
+    maker_fee_bps: 1.0
+    taker_fee_bps: 5.0
+    base_slippage_bps: 3.0
+    volatility_slippage_multiplier: 1.0
+    size_slippage_multiplier: 0.5
+    stress_slippage_multiplier: 1.5
+    liquidation_slippage_multiplier: 2.0
+    min_slippage_bps: 1.0
+    max_slippage_bps: 100.0
+    tax_bps: 0.0
+    funding_bps_per_8h: 1.0

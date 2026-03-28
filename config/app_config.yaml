@@ -1,0 +1,30 @@
+app:
+  name: "AlgoTrader"
+  version: "1.0.0"
+  log_level: "INFO"
+  output_dir: "output"
+  mode: "backtest"  # backtest | paper | live
+
+data:
+  source: "csv"
+  default_path: "data/sample.csv"
+  default_symbol: "NIFTY"
+  default_timeframe: "1h"
+
+execution:
+  adapter: "paper"  # paper | delta | groww
+  dry_run: true
+  retry_attempts: 3
+  retry_backoff_seconds: 1.0
+
+agent:
+  llm_model: "gpt-4o-mini"
+  human_approval_required_live: true
+  checkpoint_dir: "checkpoints"
+
+reporting:
+  output_dir: "output/reports"
+  generate_charts: true
+  generate_csv: true
+  generate_json: true
+  generate_audit_log: true

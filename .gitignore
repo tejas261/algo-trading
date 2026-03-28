@@ -1,0 +1,11 @@
+.claude
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite        
+.pytest_cache/
+venv/
+.env*
+output
