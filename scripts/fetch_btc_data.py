@@ -18,9 +18,9 @@ import pandas as pd
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 SYMBOL = "BTCUSDT"
-INTERVAL = "1h"
+INTERVAL = "4h"
 MAX_LIMIT = 1000  # Binance caps at 1000 per request
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "btc_1h.csv"
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "btc_4h.csv"
 
 
 def _fetch_klines(
@@ -116,10 +116,10 @@ def main() -> None:
     start_dt = (
         datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         if args.start
-        else end_dt - timedelta(days=90)
+        else end_dt - timedelta(days=730)
     )
 
-    print(f"Fetching BTC/USDT 1h candles from {start_dt.date()} to {end_dt.date()} ...")
+    print(f"Fetching BTC/USDT {INTERVAL} candles from {start_dt.date()} to {end_dt.date()} ...")
     klines = fetch_all_klines(start_dt, end_dt)
 
     if not klines:

@@ -22,12 +22,7 @@ logger = get_logger(__name__)
 # Config helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_FILES = (
-    "config/app_config.yaml",
-    "config/strategy_config.yaml",
-    "config/risk_config.yaml",
-    "config/broker_config.yaml",
-)
+BASE_CONFIG = "config/base_config.yaml"
 
 
 def _load_yaml(path: str | Path) -> dict[str, Any]:
@@ -41,28 +36,93 @@ def _load_yaml(path: str | Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def load_all_configs(base_config_path: str) -> dict[str, Any]:
-    """Load and merge all config files.
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge *override* into *base* (override wins on leaves)."""
+    merged = base.copy()
+    for key, val in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(val, dict):
+            merged[key] = _deep_merge(merged[key], val)
+        else:
+            merged[key] = val
+    return merged
 
-    If *base_config_path* is one of the four standard config files (inside
-    ``config/``), all four are loaded and merged.  If it is a single
-    standalone YAML (e.g. ``config/crypto_config.yaml``) that already
-    contains all sections, it is loaded directly and the standard files
-    are merged underneath (the standalone file wins on conflicts).
+
+def _apply_common(config: dict[str, Any]) -> dict[str, Any]:
+    """Propagate ``common:`` shortcut values into the sections that need them."""
+    common = config.get("common", {})
+    if not common:
+        return config
+
+    symbol = common.get("symbol")
+    timeframe = common.get("timeframe")
+    market_type = common.get("market_type")
+    instrument_type = common.get("instrument_type")
+    leverage = common.get("leverage")
+    initial_capital = common.get("initial_capital")
+    currency = common.get("currency")
+
+    # data section
+    data = config.setdefault("data", {})
+    if symbol:
+        data.setdefault("default_symbol", symbol)
+    if timeframe:
+        data.setdefault("default_timeframe", timeframe)
+    if market_type:
+        data.setdefault("market_type", market_type)
+
+    # strategy section
+    strategy = config.setdefault("strategy", {})
+    if timeframe:
+        strategy.setdefault("timeframe", timeframe)
+    if market_type:
+        strategy.setdefault("market_type", market_type)
+    if instrument_type:
+        strategy.setdefault("instrument_type", instrument_type)
+    if leverage is not None:
+        strategy.setdefault("leverage", leverage)
+
+    # perpetual settings → strategy
+    perp = config.get("perpetual", {})
+    for key in ("initial_margin_fraction", "maintenance_margin_fraction",
+                "liquidation_fee_bps", "funding_mode", "funding_bps_per_8h",
+                "enable_funding_costs"):
+        if key in perp:
+            strategy.setdefault(key, perp[key])
+
+    # risk section
+    risk = config.setdefault("risk", {})
+    if leverage is not None:
+        risk.setdefault("leverage", leverage)
+
+    # paper section
+    paper = config.setdefault("paper", {})
+    if initial_capital is not None:
+        paper.setdefault("initial_capital", initial_capital)
+    if currency:
+        paper.setdefault("currency", currency)
+
+    return config
+
+
+def load_all_configs(strategy_config_path: str) -> dict[str, Any]:
+    """Load base_config.yaml, then deep-merge the strategy config on top.
+
+    The ``common:`` section in base_config provides shortcut values
+    (symbol, timeframe, initial_capital, etc.) that are propagated into
+    the sections that need them, so you only set them once.
     """
-    base = Path(base_config_path)
-    merged: dict[str, Any] = {}
+    strategy_path = Path(strategy_config_path)
+    config_dir = strategy_path.parent
 
-    # Always load the standard config files first as defaults
-    config_dir = base.parent
-    for filename in _CONFIG_FILES:
-        filepath = config_dir / Path(filename).name
-        merged.update(_load_yaml(filepath))
+    # 1. Load base config
+    base = _load_yaml(config_dir / Path(BASE_CONFIG).name)
 
-    # If the user pointed at a non-standard file, overlay it on top
-    if base.name not in {Path(f).name for f in _CONFIG_FILES}:
-        override = _load_yaml(base)
-        merged.update(override)
+    # 2. Deep-merge strategy-specific overrides on top
+    override = _load_yaml(strategy_path)
+    merged = _deep_merge(base, override)
+
+    # 3. Propagate common values into relevant sections
+    merged = _apply_common(merged)
 
     return merged
 
@@ -119,22 +179,22 @@ def cli(ctx: click.Context, config_path: str, verbose: bool) -> None:
 
 @cli.command()
 @click.option("--data", "data_path", required=True, type=click.Path(exists=True), help="Path to OHLCV CSV file.")
-@click.option("--symbol", default="NIFTY", show_default=True, help="Trading symbol.")
-@click.option("--timeframe", default="1h", show_default=True, help="Candle timeframe.")
+@click.option("--symbol", default=None, help="Trading symbol (default: from config).")
+@click.option("--timeframe", default=None, help="Candle timeframe (default: from config).")
 @click.option("--start", default=None, help="Start date (YYYY-MM-DD).")
 @click.option("--end", default=None, help="End date (YYYY-MM-DD).")
-@click.option("--output-dir", default="output", show_default=True, help="Directory for reports.")
-@click.option("--initial-capital", default=1_000_000.0, show_default=True, type=float, help="Starting equity.")
+@click.option("--output-dir", default=None, help="Directory for reports (default: from config).")
+@click.option("--initial-capital", default=None, type=float, help="Starting equity (default: from config).")
 @click.pass_context
 def backtest(
     ctx: click.Context,
     data_path: str,
-    symbol: str,
-    timeframe: str,
+    symbol: str | None,
+    timeframe: str | None,
     start: str | None,
     end: str | None,
-    output_dir: str,
-    initial_capital: float,
+    output_dir: str | None,
+    initial_capital: float | None,
 ) -> None:
     """Run a historical backtest on CSV data."""
     from src.adapters.data.csv_data_adapter import CsvDataAdapter
@@ -143,7 +203,14 @@ def backtest(
     from src.strategy.strategy import TrendBreakoutStrategy
 
     config = ctx.obj["config"]
+    common = config.get("common", {})
     data_config: dict[str, Any] = config.get("data", {})
+
+    # Resolve defaults from config (CLI flags override)
+    symbol = symbol or common.get("symbol") or data_config.get("default_symbol", "BTCUSDT")
+    timeframe = timeframe or common.get("timeframe") or data_config.get("default_timeframe", "4h")
+    output_dir = output_dir or config.get("app", {}).get("output_dir", "output")
+    initial_capital = initial_capital or common.get("initial_capital") or 10_000.0
 
     start_dt = _parse_date(start)
     end_dt = _parse_date(end)
@@ -213,19 +280,13 @@ def backtest(
     cost_config_full["assumed_daily_volume"] = instrument_cfg.get("assumed_daily_volume", 1_000_000_000.0)
 
     # ---- Run backtester ---------------------------------------------------
-    # Use capital from config if not overridden by CLI
-    effective_capital = initial_capital
-    paper_capital = broker_section.get("initial_capital")
-    if paper_capital is not None and initial_capital == 1_000_000.0:
-        effective_capital = float(paper_capital)
-
-    click.echo(f"Running backtest (capital={effective_capital:,.0f}) ...")
+    click.echo(f"Running backtest (capital={initial_capital:,.0f}) ...")
     bt = Backtester(
         df=df,
         strategy_config=bt_strategy_config,
         risk_config=risk_config,
         cost_config=cost_config_full,
-        initial_capital=effective_capital,
+        initial_capital=initial_capital,
     )
     results = bt.run()
 
@@ -238,7 +299,7 @@ def backtest(
     report_config = {
         "symbol": symbol,
         "timeframe": timeframe,
-        "initial_capital": effective_capital,
+        "initial_capital": initial_capital,
         "strategy": bt_strategy_config,
         "risk": risk_config,
         "costs": cost_config_full,
@@ -253,7 +314,7 @@ def backtest(
     )
 
     # ---- Print summary ----------------------------------------------------
-    _print_backtest_summary(results, effective_capital)
+    _print_backtest_summary(results, initial_capital)
 
 
 def _build_target_list(strategy_config: dict[str, Any]) -> list[dict[str, float]] | None:

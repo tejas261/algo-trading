@@ -1,31 +1,10 @@
-# Crypto-specific config for BTC perpetual futures backtesting
-# Usage: python main.py --config config/crypto_config.yaml backtest --data data/btc_1h.csv --symbol BTCUSDT
-
-app:
-  name: "AlgoTrader-Crypto"
-  mode: "backtest"
-  log_level: "INFO"
-  output_dir: "output/btc"
-
-data:
-  source: "csv"
-  default_symbol: "BTCUSDT"
-  default_timeframe: "1h"
-  gap_detection: "warn"       # warn | fail | ignore
-  market_type: "crypto"       # crypto | equity
-
-execution:
-  adapter: "paper"
-  dry_run: true
+# Strategy: trend_breakout_v2
+# Inherits all shared settings from base_config.yaml
+# Usage: python main.py --config config/crypto_config.yaml backtest --data data/btc_4h.csv --symbol BTCUSDT
 
 strategy:
   name: "trend_breakout_v2"
   strategy_name: "trend_breakout_v2"
-  timeframe: "1h"
-  market_type: "crypto"
-
-  # Instrument type: perpetual enables funding + liquidation modeling
-  instrument_type: "perpetual"   # spot | perpetual
 
   indicators:
     strategy_name: "trend_breakout_v2"
@@ -42,66 +21,3 @@ strategy:
     exit_mode: "trend_following"
     initial_stop_atr_multiple: 2.5
     trailing_stop_atr_multiple: 4.0
-
-  # Liquidation modeling (perpetual only)
-  leverage: 2.0
-  initial_margin_fraction: 0.5    # 1/leverage
-  maintenance_margin_fraction: 0.005  # 0.5%
-  liquidation_fee_bps: 50
-
-  # Funding cost modeling (perpetual only)
-  funding_mode: "regime_approx"   # constant | series | regime_approx
-  funding_bps_per_8h: 1.0         # base rate for constant/regime modes
-  enable_funding_costs: true
-  # funding_column_name: "funding_rate"  # for series mode
-
-risk:
-  risk_per_trade_pct: 0.75
-  leverage: 2.0
-  max_trades_per_day: 2
-  consecutive_loss_stop: 3
-  cooldown_candles_after_stopout: 5
-
-  # Rolling window (crypto 24/7)
-  risk_window_mode: "rolling_24h"   # rolling_24h | calendar_day
-  risk_window_hours: 24
-
-  atr_volatility_filter:
-    enabled: true
-    max_atr_ratio: 1.5
-    rolling_window: 50
-
-  live_controls:
-    max_daily_drawdown_pct: 3.0
-    max_exposure_pct: 100.0
-    kill_switch: false
-    circuit_breaker:
-      max_consecutive_rejections: 3
-      max_slippage_bps: 50
-      slippage_window_trades: 5
-
-# Instrument specification for order validation
-instrument:
-  min_notional: 10.0        # minimum order value in USDT
-  min_qty: 0.00001          # minimum BTC quantity
-  qty_step: 0.00001         # quantity precision
-  price_tick: 0.01           # price precision
-  assumed_daily_volume: 1000000000.0  # for slippage sizing
-
-# Crypto cost model (Binance-like fees)
-paper:
-  initial_capital: 10000.0
-  currency: "USDT"
-  cost_model:
-    maker_fee_bps: 1.0
-    taker_fee_bps: 5.0
-    # Dynamic slippage model
-    base_slippage_bps: 3.0
-    volatility_slippage_multiplier: 1.0
-    size_slippage_multiplier: 0.5
-    stress_slippage_multiplier: 1.5
-    liquidation_slippage_multiplier: 2.0
-    min_slippage_bps: 1.0
-    max_slippage_bps: 100.0
-    tax_bps: 0.0
-    funding_bps_per_8h: 1.0
