@@ -13,14 +13,44 @@ pip install -r requirements.txt
 
 ## 1. Get Data
 
-Fetch BTC/USDT candles from Binance (no API key needed):
+### Crypto (Binance — no API key needed)
 
 ```bash
-# Edit scripts/fetch_btc_data.py to set INTERVAL and OUTPUT_PATH, then:
-python scripts/fetch_btc_data.py --start 2024-01-01 --end 2026-03-28
+# BTC 4h candles, last 2 years
+python scripts/fetch_btc_data.py --start 2024-03-29 --end 2026-03-29
+
+# To change coin or interval, edit scripts/fetch_btc_data.py:
+#   SYMBOL = "BTCUSDT"   (or "ETHUSDT", "SOLUSDT", etc.)
+#   INTERVAL = "4h"      (or "1h", "1d")
+#   OUTPUT_PATH = ... / "data" / "btc_4h.csv"
 ```
 
-Current defaults: `INTERVAL = "4h"`, output = `data/btc_4h.csv`.
+### Indian Equity (Yahoo Finance — no API key needed)
+
+```bash
+pip install yfinance
+
+# NIFTY 50 — 1h candles, ~2 years (max for 1h)
+python scripts/fetch_india_data.py --symbol NIFTY --interval 1h
+
+# SENSEX — daily candles, 5 years
+python scripts/fetch_india_data.py --symbol SENSEX --interval 1d --days 1825
+
+# Individual stock
+python scripts/fetch_india_data.py --symbol RELIANCE.NS --interval 1h
+
+# Bank NIFTY
+python scripts/fetch_india_data.py --symbol BANKNIFTY --interval 1h
+```
+
+**yfinance interval limits:**
+
+| Interval | Max history |
+|----------|------------|
+| 1m | 7 days |
+| 5m, 15m | 60 days |
+| 1h | 730 days (~2 years) |
+| 1d | unlimited |
 
 Your CSV must have columns: `timestamp, open, high, low, close, volume`.
 
@@ -28,33 +58,37 @@ Your CSV must have columns: `timestamp, open, high, low, close, volume`.
 
 ## 2. Configure
 
-There are two config files:
+### Config structure
 
-| File | What it controls |
-|------|-----------------|
-| `config/base_config.yaml` | **Everything shared** — symbol, timeframe, capital, leverage, fees, risk, instrument spec |
-| `config/crypto_config.yaml` or `config/crypto_donchian_config.yaml` | **Strategy-specific** — indicator params, entry/exit rules |
+```
+config/
+  base_config.yaml             # shared settings for CRYPTO (edit this first)
+  india_base_config.yaml       # shared settings for INDIAN EQUITY
+  crypto_config.yaml           # strategy: trend_breakout_v2 → inherits base_config.yaml
+  crypto_donchian_config.yaml  # strategy: donchian_trend_55  → inherits base_config.yaml
+  india_nifty_config.yaml      # strategy: trend_breakout_v2  → inherits india_base_config.yaml
+```
+
+Strategy configs inherit from their base config. To change symbol, timeframe, capital, fees, or risk — edit **only the base config**. Strategy configs only hold indicator and exit parameters.
 
 ### To change symbol, timeframe, or capital
 
-Edit **only** `config/base_config.yaml`:
+Edit `config/base_config.yaml` (crypto) or `config/india_base_config.yaml` (equity):
 
 ```yaml
 common:
-  symbol: "BTCUSDT"         # change to "ETHUSDT", etc.
+  symbol: "BTCUSDT"         # change to "ETHUSDT", "NIFTY", etc.
   timeframe: "4h"           # change to "1h", "1d", etc.
   initial_capital: 10000.0  # starting equity
-  currency: "USDT"
+  currency: "USDT"          # or "INR"
   market_type: "crypto"     # crypto | equity
   instrument_type: "perpetual"  # spot | perpetual
   leverage: 2.0
 ```
 
-These values automatically propagate to all other config sections. No need to change anything else.
-
 ### To change fees, risk, or slippage
 
-Also in `config/base_config.yaml`:
+Also in the base config:
 
 ```yaml
 risk:
@@ -69,6 +103,7 @@ paper:
   cost_model:
     taker_fee_bps: 1.0      # 1 for limit orders, 5 for market orders
     base_slippage_bps: 3.0
+    tax_bps: 0.0             # set 10.0 for Indian equity (STT/CTT)
 ```
 
 ### To change strategy parameters
@@ -76,7 +111,7 @@ paper:
 Edit the strategy config file:
 
 ```yaml
-# config/crypto_config.yaml (trend_breakout_v2)
+# config/crypto_config.yaml
 strategy:
   indicators:
     adx_threshold: 22       # higher = fewer but stronger signals
@@ -92,22 +127,37 @@ strategy:
 
 | Strategy | Config File | Entry | Exit |
 |----------|------------|-------|------|
-| **trend_breakout_v2** | `config/crypto_config.yaml` | EMA alignment + ADX + Donchian breakout | EMA crossover or ATR trailing stop |
-| **donchian_trend_55** | `config/crypto_donchian_config.yaml` | 55-bar Donchian channel breakout | Opposite channel breakout or ATR trailing stop |
+| **trend_breakout_v2** | `crypto_config.yaml` / `india_nifty_config.yaml` | EMA alignment + ADX + Donchian breakout | EMA crossover or ATR trailing stop |
+| **donchian_trend_55** | `crypto_donchian_config.yaml` | 55-bar Donchian channel breakout | Opposite channel breakout or ATR trailing stop |
 
 ---
 
-## 4. Run a Backtest
+## 4. Backtest
+
+All settings (symbol, timeframe, capital) come from the config. Just point at data.
+
+### Crypto
 
 ```bash
-# trend_breakout_v2 (symbol, timeframe, capital all come from base_config.yaml)
+# trend_breakout_v2
 python main.py --config config/crypto_config.yaml backtest --data data/btc_4h.csv
 
 # donchian_trend_55
 python main.py --config config/crypto_donchian_config.yaml backtest --data data/btc_4h.csv
+
+# With date filter and custom output directory
+python main.py --config config/crypto_config.yaml backtest \
+  --data data/btc_4h.csv --start 2025-01-01 --end 2025-12-31 \
+  --output-dir output/btc_2025
 ```
 
-### Optional CLI overrides (take precedence over config)
+### Indian Equity
+
+```bash
+python main.py --config config/india_nifty_config.yaml backtest --data data/nifty_1h.csv
+```
+
+### CLI overrides (take precedence over config)
 
 ```
 --symbol ETHUSDT            # override symbol
@@ -121,7 +171,58 @@ python main.py --config config/crypto_donchian_config.yaml backtest --data data/
 
 ---
 
-## 5. Read the Output
+## 5. Paper Trading
+
+Simulated live execution — runs the LangGraph agent loop over historical data, processing one candle at a time.
+
+### Crypto
+
+```bash
+python main.py --config config/crypto_config.yaml paper --data data/btc_4h.csv
+```
+
+### Indian Equity
+
+```bash
+python main.py --config config/india_nifty_config.yaml paper --data data/nifty_1h.csv
+```
+
+---
+
+## 6. Live Trading
+
+Real orders through a broker adapter. All trades require human approval.
+
+```bash
+# Crypto via Delta Exchange
+python main.py --config config/crypto_config.yaml live --broker delta
+
+# Indian equity via Groww
+python main.py --config config/india_nifty_config.yaml live --broker groww
+```
+
+You will see a confirmation prompt before any orders are placed. Broker API credentials must be set in the config (or environment variables).
+
+---
+
+## 7. Agent Mode
+
+Full agentic LangGraph workflow — combines data fetch, strategy, risk, execution, and monitoring in a single orchestrated loop.
+
+```bash
+# Agent-driven backtest
+python main.py --config config/crypto_config.yaml agent --mode backtest --data data/btc_4h.csv
+
+# Agent-driven paper trading
+python main.py --config config/crypto_config.yaml agent --mode paper --data data/btc_4h.csv
+
+# Agent-driven live trading (requires human approval)
+python main.py --config config/crypto_config.yaml agent --mode live
+```
+
+---
+
+## 8. Read the Output
 
 Reports are saved to the `--output-dir` folder (default: `output/`):
 
@@ -135,31 +236,7 @@ Reports are saved to the `--output-dir` folder (default: `output/`):
 
 ---
 
-## 6. Other Modes
-
-### Paper Trading (simulated live)
-
-```bash
-python main.py --config config/crypto_config.yaml paper --data data/btc_4h.csv
-```
-
-### Live Trading (real orders, requires broker adapter)
-
-```bash
-python main.py --config config/crypto_config.yaml live --broker delta
-```
-
-Requires confirmation prompt. All trades need human approval.
-
-### Agent Mode (LangGraph orchestration)
-
-```bash
-python main.py --config config/crypto_config.yaml agent --mode backtest --data data/btc_4h.csv
-```
-
----
-
-## 7. Run Tests
+## 9. Run Tests
 
 ```bash
 python -m pytest tests/ -v
@@ -173,14 +250,17 @@ python -m pytest tests/ -v
 algo trading/
   main.py                          # CLI entry point
   config/
-    base_config.yaml               # shared settings (edit this first)
-    crypto_config.yaml             # trend_breakout_v2 strategy
-    crypto_donchian_config.yaml    # donchian_trend_55 strategy
+    base_config.yaml               # shared settings — crypto
+    india_base_config.yaml         # shared settings — Indian equity
+    crypto_config.yaml             # trend_breakout_v2 (crypto)
+    crypto_donchian_config.yaml    # donchian_trend_55 (crypto)
+    india_nifty_config.yaml        # trend_breakout_v2 (NIFTY)
   data/
     btc_4h.csv                     # 2yr of 4h BTC candles
-    btc_1h.csv                     # 3mo of 1h BTC candles
+    nifty_1h.csv                   # 2yr of 1h NIFTY candles
   scripts/
-    fetch_btc_data.py              # data fetcher (Binance)
+    fetch_btc_data.py              # crypto data fetcher (Binance)
+    fetch_india_data.py            # Indian market data fetcher (yfinance)
   output/                          # backtest reports land here
   src/
     strategy/                      # signals, indicators, strategy logic

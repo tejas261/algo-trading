@@ -6,11 +6,12 @@
 # -- Common settings (change these before backtesting) --
 common:
   symbol: "BTCUSDT"
+  # symbol: "ETHUSDT"
   timeframe: "4h"
   initial_capital: 10000.0
   currency: "USDT"
-  market_type: "crypto"           # crypto | equity
-  instrument_type: "perpetual"    # spot | perpetual
+  market_type: "crypto" # crypto | equity
+  instrument_type: "perpetual" # spot | perpetual
   leverage: 2.0
 
 app:
@@ -20,7 +21,7 @@ app:
 
 data:
   source: "csv"
-  gap_detection: "warn"           # warn | fail | ignore
+  gap_detection: "warn" # warn | fail | ignore
 
 execution:
   adapter: "paper"
@@ -33,7 +34,7 @@ risk:
   max_trades_per_day: 2
   consecutive_loss_stop: 3
   cooldown_candles_after_stopout: 3
-  risk_window_mode: "rolling_24h"   # rolling_24h | calendar_day
+  risk_window_mode: "rolling_24h" # rolling_24h | calendar_day
   risk_window_hours: 24
   atr_volatility_filter:
     enabled: true
@@ -58,10 +59,10 @@ instrument:
 
 # -- Perpetual futures settings --
 perpetual:
-  initial_margin_fraction: 0.5      # 1 / leverage
+  initial_margin_fraction: 0.5 # 1 / leverage
   maintenance_margin_fraction: 0.005
   liquidation_fee_bps: 50
-  funding_mode: "regime_approx"     # constant | series | regime_approx
+  funding_mode: "regime_approx" # constant | series | regime_approx
   funding_bps_per_8h: 1.0
   enable_funding_costs: true
 
